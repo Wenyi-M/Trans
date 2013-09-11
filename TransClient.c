@@ -74,37 +74,66 @@ int main(int argc , char * argv[])
 	if(argc < 2) PrintErr("Command args Error")
 
 	struct sockaddr_in ser_addr ;
-
-	bzero(&ser_addr , sizeof(ser_addr)) ;
-	ser_addr.sin_family = AF_INET ;
-	inet_aton(argv[1] , &ser_addr.sin_addr) ;
-	ser_addr.sin_port = htons(SERPORT) ;
-
-	int sockfd = socket(AF_INET , SOCK_STREAM , 0) ;
-	if(sockfd < 0) PrintErr("socket call error")
-
-	int ret = connect(sockfd , (struct sockaddr *) &ser_addr , sizeof(ser_addr)) ;
-	if(ret < 0) PrintErr("connect call error")
-
+	
 	struct _file {
 		int opt ;	//存储不同的选项，1表示上传，-1表示下载，0表示退出
 		char filename[MAXNAMLEN+1] ;
 	} file ;
+	
+	while(1)
+	{
+		bzero(&file , sizeof(file)) ;
+		char method[MAXNAMLEN] ;
+		printf("Please Input : Upload 、Download with filename , type Exit will do you want :\n") ;
+		scanf("%s", method) ;
+		if(strcmp("Upload" , method) == 0)
+			file.opt = 1 ;
+		else if(strcmp("Download" , method) == 0)
+			file.opt = 2 ;
+		else if(strcmp("Exit" , method) == 0)
+			break ;
+		else 
+		{
+			Print("Wrong Command") ;
+			if(!feof(stdin) && !ferror(stdin))
+			{
+				char c ;
+				while((c = getchar()) != '\n' && c != EOF) ;
+			}
+			continue ;
+		}
+		
+		scanf("%s" , file.filename) ;
+		
+		bzero(&ser_addr , sizeof(ser_addr)) ;
+		ser_addr.sin_family = AF_INET ;
+		inet_aton(argv[1] , &ser_addr.sin_addr) ;
+		ser_addr.sin_port = htons(SERPORT) ;
 
-	bzero(&file , sizeof(file)) ;
-	char method[MAXNAMLEN] ;
-	printf("Please Input Operator Way : Upload 、Download with filename ,anything else will exit :\n") ;
-	scanf("%s %s", method , file.filename) ;
-	if(strncmp("Upload" , method , strlen("Upload")) == 0)
-		file.opt = 1 ;
-	else if(strncmp("Download" , method , strlen("Download")) == 0)
-		file.opt = 2 ;
-	else PrintErr("Wrong Command")
+		int sockfd = socket(AF_INET , SOCK_STREAM , 0) ;
+		if(sockfd < 0) PrintErr("socket call error")
+	
+		pid_t child ;
+		if((child = fork()) < 0)
+			PrintErr("Fork error")
+		else if(child == 0)
+		{
+			int ret = connect(sockfd , (struct sockaddr *) &ser_addr , sizeof(ser_addr)) ;
+			if(ret < 0) PrintErr("connect call error")
 
-	if(file.opt == 1) Upload(sockfd , file.filename) ;
-	else if(file.opt == 2) Download(sockfd , file.filename) ;
-
-	close(sockfd) ;
+			if(file.opt == 1) Upload(sockfd , file.filename) ;
+			else if(file.opt == 2) Download(sockfd , file.filename) ;
+			close(sockfd) ;
+			exit(0) ;
+		}
+		
+		close(sockfd) ;
+		int status ;
+		waitpid(child , &status , 0) ;
+		if(!WIFEXITED(status))
+			break ;
+	}
 	return 0 ;
 }
+
 
